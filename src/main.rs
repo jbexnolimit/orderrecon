@@ -1,6 +1,8 @@
 mod config;
 mod database;
+mod models;
 mod routes;
+mod services;
 
 use tracing_subscriber::EnvFilter;
 
@@ -18,6 +20,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::Config::from_env()?;
 
     let database = database::connect(&config.mongodb_uri, &config.mongodb_database).await?;
+
+    database::ensure_indexes(&database).await?;
+
+    tracing::info!("MongoDB indexes initialized");
 
     tracing::info!(
         database = %config.mongodb_database,
