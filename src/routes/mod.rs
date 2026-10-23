@@ -1,13 +1,10 @@
 pub mod discrepancies;
 pub mod orders;
 pub mod payments;
+pub mod reconciliation_report;
+pub mod reconciliation_runs;
 
-use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    routing::{get, post},
-};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
 use mongodb::{Database, bson::doc};
 use serde_json::{Value, json};
 
@@ -56,7 +53,11 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route(
             "/api/v1/reconciliation-runs",
-            post(create_reconciliation_run),
+            get(reconciliation_runs::list_reconciliation_runs).post(create_reconciliation_run),
+        )
+        .route(
+            "/api/v1/reconciliation-runs/{id}",
+            get(reconciliation_runs::get_reconciliation_run),
         )
         .route(
             "/api/v1/discrepancies",
@@ -69,6 +70,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/v1/discrepancies/{id}/resolution",
             axum::routing::patch(discrepancies::resolve_discrepancy),
+        )
+        .route(
+            "/api/v1/reports/reconciliation",
+            get(reconciliation_report::get_reconciliation_report),
         )
         .with_state(state)
 }
