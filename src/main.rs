@@ -1,9 +1,4 @@
-mod config;
-mod database;
-mod models;
-mod routes;
-mod services;
-
+use orderrecon::{config, database, routes};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
