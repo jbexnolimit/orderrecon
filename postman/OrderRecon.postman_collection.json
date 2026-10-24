@@ -1,0 +1,678 @@
+{
+  "info": {
+    "name": "OrderRecon API",
+    "description": "Portfolio demonstration of order management, payment imports, reconciliation runs, discrepancy review, and reporting.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "orderRef",
+      "value": "ORD-POSTMAN-001"
+    },
+    {
+      "key": "source",
+      "value": "postman_demo"
+    },
+    {
+      "key": "transactionId",
+      "value": "TXN-POSTMAN-001"
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "discrepancyId",
+      "value": ""
+    },
+    {
+      "key": "mismatchOrderRef",
+      "value": ""
+    },
+    {
+      "key": "mismatchTransactionId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "item": [
+        {
+          "name": "Check API and MongoDB",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Health endpoint returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Database is connected', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('ok');",
+                  "    pm.expect(body.database).to.eql('connected');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Orders",
+      "item": [
+        {
+          "name": "Create Demo Order",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('orderRef', 'ORD-POSTMAN-' + Date.now());",
+                  "pm.collectionVariables.set('transactionId', 'TXN-POSTMAN-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Order fields are correct', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.order_ref).to.eql(pm.collectionVariables.get('orderRef'));",
+                  "    pm.expect(body.amount_minor).to.eql(150000);",
+                  "    pm.expect(body.currency).to.eql('PHP');",
+                  "    pm.expect(body).to.have.property('_id');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_ref\": \"{{orderRef}}\",\n  \"amount_minor\": 150000,\n  \"currency\": \"PHP\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders"
+          }
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Orders list returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains pagination', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.data).to.be.an('array');",
+                  "    pm.expect(body.pagination.page).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Demo Order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderRef}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order retrieval returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Retrieved reference matches', function () {",
+                  "    pm.expect(pm.response.json().order_ref).to.eql(pm.collectionVariables.get('orderRef'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Payments",
+      "item": [
+        {
+          "name": "Import Matching Captured Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"{{source}}\",\n  \"payments\": [\n    {\n      \"source_transaction_id\": \"{{transactionId}}\",\n      \"order_ref\": \"{{orderRef}}\",\n      \"amount_minor\": 150000,\n      \"currency\": \"PHP\",\n      \"status\": \"captured\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/payments/import"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Payment import returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('One payment was imported', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.summary.imported).to.eql(1);",
+                  "    pm.expect(body.summary.duplicates).to.eql(0);",
+                  "    pm.expect(body.summary.rejected).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payments?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Payments list returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains payment data', function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Reconciliation",
+      "item": [
+        {
+          "name": "Execute Reconciliation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reconciliation-runs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reconciliation run returns 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Run completed', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('completed');",
+                  "    pm.expect(body).to.have.property('summary');",
+                  "    pm.expect(body.summary).to.have.property('matched_orders');",
+                  "    pm.expect(body._id).to.be.a('string');",
+                  "    pm.collectionVariables.set('runId', body._id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Latest Run by Saved ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reconciliation-runs/{{runId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Run retrieval returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Retrieved run ID matches', function () {",
+                  "    pm.expect(pm.response.json()._id).to.eql(pm.collectionVariables.get('runId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Reconciliation Runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reconciliation-runs?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Runs list returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Runs response contains pagination total', function () {",
+                  "    pm.expect(pm.response.json().pagination).to.have.property('total');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Reconciliation Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reports/reconciliation?run_id={{runId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Report returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Report references the saved run', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.run_id).to.eql(pm.collectionVariables.get('runId'));",
+                  "    pm.expect(body.status).to.eql('completed');",
+                  "    pm.expect(body).to.have.property('discrepancies');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Discrepancies",
+      "item": [
+        {
+          "name": "List Open Discrepancies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/discrepancies?page=1&limit=20&status=open"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Discrepancy list returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains discrepancy array', function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Discrepancy by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/discrepancies/{{discrepancyId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Discrepancy retrieval returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resolve Discrepancy",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"resolved\",\n  \"resolution_note\": \"Reviewed during the OrderRecon Postman demonstration.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/discrepancies/{{discrepancyId}}/resolution"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resolution request succeeds', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Discrepancy is resolved', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('resolved');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Mismatch Demo",
+      "item": [
+        {
+          "name": "1. Create Mismatch Order",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "const stamp = Date.now().toString();",
+                  "pm.collectionVariables.set('mismatchOrderRef', 'ORD-MISMATCH-' + stamp);",
+                  "pm.collectionVariables.set('mismatchTransactionId', 'TXN-MISMATCH-' + stamp);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test('Mismatch demo order created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.order_ref).to.eql(pm.collectionVariables.get('mismatchOrderRef'));",
+                  "    pm.expect(body.amount_minor).to.eql(150000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_ref\": \"{{mismatchOrderRef}}\",\n  \"amount_minor\": 150000,\n  \"currency\": \"PHP\",\n  \"status\": \"placed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2. Import Lower-Amount Captured Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test('Mismatch payment imported', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.summary.imported).to.eql(1);",
+                  "    pm.expect(body.summary.rejected).to.eql(0);",
+                  "    pm.expect(body.results[0].status).to.eql('imported');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payments/import",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"postman_mismatch_demo\",\n  \"payments\": [\n    {\n      \"source_transaction_id\": \"{{mismatchTransactionId}}\",\n      \"order_ref\": \"{{mismatchOrderRef}}\",\n      \"amount_minor\": 120000,\n      \"currency\": \"PHP\",\n      \"status\": \"captured\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3. Run Reconciliation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test('Reconciliation completed', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('completed');",
+                  "    const id = typeof body._id === 'string' ? body._id : body._id?.$oid;",
+                  "    pm.expect(id, 'run ID').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('runId', id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/reconciliation-runs"
+          },
+          "response": []
+        },
+        {
+          "name": "4. Find This Order's Amount Mismatch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test('Mismatch discrepancy found for this order', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const orderRef = pm.collectionVariables.get('mismatchOrderRef');",
+                  "    const found = body.data.find(d =>",
+                  "        d.order_ref === orderRef &&",
+                  "        d.discrepancy_type === 'amount_mismatch'",
+                  "    );",
+                  "    pm.expect(found, 'amount mismatch for ' + orderRef).to.exist;",
+                  "    pm.expect(found.expected_amount_minor).to.eql(150000);",
+                  "    pm.expect(found.actual_amount_minor).to.eql(120000);",
+                  "    pm.expect(found.status).to.eql('open');",
+                  "",
+                  "    const id = typeof found._id === 'string' ? found._id : found._id?.$oid;",
+                  "    pm.expect(id, 'discrepancy ID').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('discrepancyId', id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/discrepancies?status=open&discrepancy_type=amount_mismatch&run_id={{runId}}&page=1&limit=100"
+          },
+          "response": []
+        },
+        {
+          "name": "5. Retrieve Mismatch Discrepancy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test('Retrieved discrepancy matches the demo order', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.order_ref).to.eql(pm.collectionVariables.get('mismatchOrderRef'));",
+                  "    pm.expect(body.discrepancy_type).to.eql('amount_mismatch');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/discrepancies/{{discrepancyId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "6. Resolve Mismatch Discrepancy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test('Mismatch discrepancy resolved', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('resolved');",
+                  "    pm.expect(body.resolution_note).to.include('PHP 300.00');",
+                  "    pm.expect(body.order_ref).to.eql(pm.collectionVariables.get('mismatchOrderRef'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/discrepancies/{{discrepancyId}}/resolution",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"resolved\",\n  \"resolution_note\": \"Demo review: investigated the PHP 300.00 difference between the order and captured payment.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
