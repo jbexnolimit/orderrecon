@@ -93,7 +93,7 @@ Reconciliation runs execute synchronously through the API request. The current i
 
 
 ## Project Structure
-
+```text
 orderrecon/
 ├── src/
 │   ├── config.rs
@@ -120,7 +120,7 @@ orderrecon/
 ├── Cargo.toml
 ├── Cargo.lock
 └── README.md
-
+```
 
 
 ## Prerequisites
