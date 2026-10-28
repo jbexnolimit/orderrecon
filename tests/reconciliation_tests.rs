@@ -40,7 +40,8 @@ fn matching_payment_has_no_discrepancy() {
     let run_id = ObjectId::new();
     let mut summary = ReconciliationSummary::default();
 
-    let result = reconcile_order(run_id, &order, &[&payment], &mut summary);
+    let result = reconcile_order(run_id, &order, &[&payment], &mut summary)
+        .expect("Reconciliation rule should not overflow");
 
     assert!(result.is_none());
     assert_eq!(summary.matched_orders, 1);
@@ -56,7 +57,8 @@ fn missing_payment_creates_discrepancy() {
     let run_id = ObjectId::new();
     let mut summary = ReconciliationSummary::default();
 
-    let result = reconcile_order(run_id, &order, &[], &mut summary);
+    let result = reconcile_order(run_id, &order, &[], &mut summary)
+        .expect("Reconciliation rule should not overflow");
 
     let discrepancy = result.expect("Expected a missing-payment discrepancy");
 
@@ -78,7 +80,8 @@ fn incorrect_amount_creates_amount_mismatch() {
     let run_id = ObjectId::new();
     let mut summary = ReconciliationSummary::default();
 
-    let result = reconcile_order(run_id, &order, &[&payment], &mut summary);
+    let result = reconcile_order(run_id, &order, &[&payment], &mut summary)
+        .expect("Reconciliation rule should not overflow");
 
     let discrepancy = result.expect("Expected an amount-mismatch discrepancy");
 
@@ -98,7 +101,8 @@ fn incorrect_currency_creates_currency_mismatch() {
     let run_id = ObjectId::new();
     let mut summary = ReconciliationSummary::default();
 
-    let result = reconcile_order(run_id, &order, &[&payment], &mut summary);
+    let result = reconcile_order(run_id, &order, &[&payment], &mut summary)
+        .expect("Reconciliation rule should not overflow");
 
     let discrepancy = result.expect("Expected a currency-mismatch discrepancy");
 
@@ -120,7 +124,8 @@ fn duplicate_payments_take_priority_over_amount_mismatch() {
     let run_id = ObjectId::new();
     let mut summary = ReconciliationSummary::default();
 
-    let result = reconcile_order(run_id, &order, &[&payment_one, &payment_two], &mut summary);
+    let result = reconcile_order(run_id, &order, &[&payment_one, &payment_two], &mut summary)
+        .expect("Reconciliation rule should not overflow");
 
     let discrepancy = result.expect("Expected a duplicate-payment discrepancy");
 
@@ -150,4 +155,17 @@ fn unmatched_payment_references_unknown_order() {
     assert_eq!(discrepancy.actual_amount_minor, Some(75_000));
     assert_eq!(discrepancy.expected_amount_minor, None);
     assert_eq!(discrepancy.status, DiscrepancyStatus::Open);
+}
+
+#[test]
+fn duplicate_payment_total_overflow_returns_error() {
+    let order = make_order();
+    let payment_one = make_payment("ORD-1001", i64::MAX, "PHP");
+    let payment_two = make_payment("ORD-1001", 1, "PHP");
+    let run_id = ObjectId::new();
+    let mut summary = ReconciliationSummary::default();
+
+    let result = reconcile_order(run_id, &order, &[&payment_one, &payment_two], &mut summary);
+
+    assert!(result.is_err());
 }

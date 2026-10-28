@@ -6,6 +6,11 @@ use crate::models::{
     payment::Payment,
     reconciliation_run::ReconciliationSummary,
 };
+#[derive(Debug, thiserror::Error)]
+pub enum ReconciliationRuleError {
+    #[error("Duplicate payment total exceeds the supported amount range.")]
+    PaymentTotalOverflow,
+}
 
 struct DiscrepancyDetails {
     discrepancy_type: DiscrepancyType,
@@ -42,12 +47,12 @@ pub fn reconcile_order(
     order: &Order,
     payments: &[&Payment],
     summary: &mut ReconciliationSummary,
-) -> Option<Discrepancy> {
+) -> Result<Option<Discrepancy>, ReconciliationRuleError> {
     let payment = match payments {
         [] => {
             summary.missing_payment += 1;
 
-            return Some(new_discrepancy(
+            return Ok(Some(new_discrepancy(
                 run_id,
                 DiscrepancyDetails {
                     discrepancy_type: DiscrepancyType::MissingPayment,
@@ -58,15 +63,20 @@ pub fn reconcile_order(
                     expected_currency: Some(order.currency.clone()),
                     actual_currency: None,
                 },
-            ));
+            )));
         }
         [_, _, ..] => {
             summary.duplicate_payment += 1;
 
             let payment_ids = payments.iter().filter_map(|payment| payment.id).collect();
-            let actual_amount = payments.iter().map(|payment| payment.amount_minor).sum();
+            let actual_amount = payments
+                .iter()
+                .try_fold(0_i64, |total, payment| {
+                    total.checked_add(payment.amount_minor)
+                })
+                .ok_or(ReconciliationRuleError::PaymentTotalOverflow)?;
 
-            return Some(new_discrepancy(
+            return Ok(Some(new_discrepancy(
                 run_id,
                 DiscrepancyDetails {
                     discrepancy_type: DiscrepancyType::DuplicatePayment,
@@ -77,7 +87,7 @@ pub fn reconcile_order(
                     expected_currency: Some(order.currency.clone()),
                     actual_currency: None,
                 },
-            ));
+            )));
         }
         [payment] => payment,
     };
@@ -85,7 +95,7 @@ pub fn reconcile_order(
     if payment.currency != order.currency {
         summary.currency_mismatch += 1;
 
-        return Some(new_discrepancy(
+        return Ok(Some(new_discrepancy(
             run_id,
             DiscrepancyDetails {
                 discrepancy_type: DiscrepancyType::CurrencyMismatch,
@@ -96,13 +106,13 @@ pub fn reconcile_order(
                 expected_currency: Some(order.currency.clone()),
                 actual_currency: Some(payment.currency.clone()),
             },
-        ));
+        )));
     }
 
     if payment.amount_minor != order.amount_minor {
         summary.amount_mismatch += 1;
 
-        return Some(new_discrepancy(
+        return Ok(Some(new_discrepancy(
             run_id,
             DiscrepancyDetails {
                 discrepancy_type: DiscrepancyType::AmountMismatch,
@@ -113,11 +123,11 @@ pub fn reconcile_order(
                 expected_currency: Some(order.currency.clone()),
                 actual_currency: Some(payment.currency.clone()),
             },
-        ));
+        )));
     }
 
     summary.matched_orders += 1;
-    None
+    Ok(None)
 }
 
 pub fn unmatched_payment_discrepancy(run_id: ObjectId, payment: &Payment) -> Discrepancy {
