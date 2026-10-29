@@ -52,7 +52,7 @@ Order statuses are `placed`, `fulfilled`, and `cancelled`. The current reconcili
 
 ## Architecture
 
-
+```mermaid
 flowchart TD
     Client["API Client / Postman"]
 
@@ -81,7 +81,7 @@ flowchart TD
     Rules <--> DB
     Discrepancies <--> DB
     Reports --> DB
-
+```
 ### Request Flow
 
 1. **Order and payment ingestion:** Clients create orders and import payment transactions through the REST API.
@@ -282,10 +282,12 @@ The resolution note is required and must contain between 1 and 1,000 characters.
 
 ## Testing
 
-Run the automated test suite:
+The integration tests use a dedicated MongoDB test database. Ensure MongoDB is running and set the test database variable before running the suite.
+
+Run all tests:
 
 ```bash
-cargo test -- --test-threads=1
+ORDERRECON_TEST_DATABASE=orderrecon_test cargo test
 ```
 
 Check formatting:
@@ -294,16 +296,16 @@ Check formatting:
 cargo fmt --check
 ```
 
-Check compilation:
-
-```bash
-cargo check
-```
-
 Run Clippy with warnings treated as errors:
 
 ```bash
 cargo clippy --all-targets --all-features -- -D warnings
+```
+
+Compile the project:
+
+```bash
+cargo check
 ```
 
 ## Postman Collection
